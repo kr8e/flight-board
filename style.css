@@ -1,0 +1,33 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+}
+
+h1 {
+    margin: 20px;
+}
+
+table {
+    margin: auto;
+    border-collapse: collapse;
+    width: 90%;
+}
+
+th, td {
+    padding: 8px;
+    border-bottom: 1px solid #444;
+}
+
+.status-on-time {
+    background-color: green;
+}
+
+.status-delayed {
+    background-color: goldenrod;
+}
+
+.status-cancelled {
+    background-color: crimson;
+}
