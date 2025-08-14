@@ -1,32 +1,148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Live Flight Board</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Flight Board</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: black;
+      color: white;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    form {
+      margin: 20px;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px;
+      font-size: 16px;
+    }
+    table {
+      margin: auto;
+      border-collapse: collapse;
+      width: 90%;
+      font-size: 18px;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid gray;
+    }
+    .green { background-color: green; color: white; }
+    .yellow { background-color: gold; color: black; }
+    .red { background-color: crimson; color: white; }
+    .gray { background-color: gray; color: white; }
+  </style>
 </head>
 <body>
-    <h1>Live Flight Board</h1>
 
-    <form id="flight-form">
-        <input type="text" id="flight-number" placeholder="Flight number (e.g., DAL123)" required>
-        <button type="submit">Add Flight</button>
-    </form>
+<h1>Live Flight Board</h1>
 
-    <table id="flight-table">
-        <thead>
-            <tr>
-                <th>Flight</th>
-                <th>From</th>
-                <th>Dep Time</th>
-                <th>To</th>
-                <th>Arr Time</th>
-                <th>Status</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+<form id="flightForm">
+  <input type="text" id="flightNumber" placeholder="Flight Number (e.g. 100)" required>
+  <input type="date" id="flightDate" required>
+  <button type="submit">Add Flight</button>
+</form>
 
-    <script src="script.js"></script>
+<table>
+  <thead>
+    <tr>
+      <th>Flight</th>
+      <th>From</th>
+      <th>Departs</th>
+      <th>To</th>
+      <th>Arrives</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody id="flightTable">
+    <tr><td colspan="6">Loading...</td></tr>
+  </tbody>
+</table>
+
+<script>
+const API_KEY = "f01d8a46ee087e3c97ccf5c18515cee6";
+let flights = JSON.parse(localStorage.getItem("flights")) || [];
+
+document.getElementById("flightForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const flightNumber = document.getElementById("flightNumber").value.trim();
+  const flightDate = document.getElementById("flightDate").value;
+  flights.push({ flightNumber, flightDate });
+  localStorage.setItem("flights", JSON.stringify(flights));
+  document.getElementById("flightForm").reset();
+  fetchFlights();
+});
+
+async function fetchFlights() {
+  const table = document.getElementById("flightTable");
+  table.innerHTML = "";
+
+  for (const flight of flights) {
+    try {
+      const url = `https://api.aviationstack.com/v1/flights?access_key=${API_KEY}&flight_number=${encodeURIComponent(flight.flightNumber)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!data.data || data.data.length === 0) {
+        table.innerHTML += `<tr><td colspan="6">No data for flight ${flight.flightNumber}</td></tr>`;
+        continue;
+      }
+
+      // Filter by date
+      const match = data.data.find(f => f.flight_date === flight.flightDate);
+      if (!match) {
+        table.innerHTML += `<tr><td colspan="6">No matching date for flight ${flight.flightNumber}</td></tr>`;
+        continue;
+      }
+
+      const depAirport = match.departure.airport || "";
+      const depTime = match.departure.actual || match.departure.scheduled || "";
+      const arrAirport = match.arrival.airport || "";
+      const arrTime = match.arrival.estimated || match.arrival.scheduled || "";
+      const status = match.flight_status || "unknown";
+
+      const landedTime = match.arrival.actual ? new Date(match.arrival.actual) : null;
+      if (status === "landed" && landedTime) {
+        const diffMin = (Date.now() - landedTime.getTime()) / 60000;
+        if (diffMin > 30) continue; // Skip if more than 30 min after landing
+      }
+
+      let statusClass = "";
+      if (status === "scheduled" || status === "active") statusClass = "green";
+      else if (status === "delayed") statusClass = "yellow";
+      else if (status === "cancelled") statusClass = "red";
+      else if (status === "landed") statusClass = "gray";
+
+      table.innerHTML += `
+        <tr class="${statusClass}">
+          <td>${match.flight.iata || match.flight.number || ""}</td>
+          <td>${depAirport}</td>
+          <td>${formatTime(depTime)}</td>
+          <td>${arrAirport}</td>
+          <td>${formatTime(arrTime)}</td>
+          <td>${status}</td>
+        </tr>
+      `;
+    } catch (err) {
+      table.innerHTML += `<tr><td colspan="6">Error loading ${flight.flightNumber}</td></tr>`;
+    }
+  }
+}
+
+function formatTime(dateString) {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  if (isNaN(d)) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+fetchFlights();
+setInterval(fetchFlights, 60000); // refresh every 60s
+</script>
+
 </body>
 </html>
