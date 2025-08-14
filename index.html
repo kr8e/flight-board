@@ -2,47 +2,26 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Flight Board</title>
+  <title>Flight Board - Scheduled & Live</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: black;
-      color: white;
-      text-align: center;
-    }
-    h1 {
-      margin-top: 20px;
-    }
-    form {
-      margin: 20px;
-    }
-    input, button {
-      padding: 8px;
-      margin: 5px;
-      font-size: 16px;
-    }
-    table {
-      margin: auto;
-      border-collapse: collapse;
-      width: 90%;
-      font-size: 18px;
-    }
-    th, td {
-      padding: 10px;
-      border-bottom: 1px solid gray;
-    }
-    .green { background-color: green; color: white; }
-    .yellow { background-color: gold; color: black; }
-    .red { background-color: crimson; color: white; }
-    .gray { background-color: gray; color: white; }
+    body { font-family: Arial; background:black; color:white; text-align:center; }
+    h1 { margin-top:20px; }
+    form { margin:20px; }
+    input, button { padding:8px; margin:5px; font-size:16px; }
+    table { margin:auto; border-collapse:collapse; width:90%; font-size:18px; }
+    th, td { padding:10px; border-bottom:1px solid gray; }
+    .green { background-color:green; color:white; }
+    .yellow { background-color:gold; color:black; }
+    .red { background-color:crimson; color:white; }
+    .gray { background-color:gray; color:white; }
   </style>
 </head>
 <body>
 
-<h1>Live Flight Board</h1>
+<h1>Flight Board - Scheduled & Live</h1>
 
 <form id="flightForm">
-  <input type="text" id="flightNumber" placeholder="Flight Number (e.g. 100)" required>
+  <input type="text" id="flightNumber" placeholder="Flight Number (e.g., 100)" required>
   <input type="date" id="flightDate" required>
   <button type="submit">Add Flight</button>
 </form>
@@ -59,7 +38,7 @@
     </tr>
   </thead>
   <tbody id="flightTable">
-    <tr><td colspan="6">Loading...</td></tr>
+    <tr><td colspan="6">No flights added yet</td></tr>
   </tbody>
 </table>
 
@@ -67,9 +46,11 @@
 const API_KEY = "f01d8a46ee087e3c97ccf5c18515cee6";
 let flights = JSON.parse(localStorage.getItem("flights")) || [];
 
+const tableBody = document.getElementById("flightTable");
+
 document.getElementById("flightForm").addEventListener("submit", e => {
   e.preventDefault();
-  const flightNumber = document.getElementById("flightNumber").value.trim();
+  const flightNumber = document.getElementById("flightNumber").value.trim().toUpperCase();
   const flightDate = document.getElementById("flightDate").value;
   flights.push({ flightNumber, flightDate });
   localStorage.setItem("flights", JSON.stringify(flights));
@@ -78,57 +59,55 @@ document.getElementById("flightForm").addEventListener("submit", e => {
 });
 
 async function fetchFlights() {
-  const table = document.getElementById("flightTable");
-  table.innerHTML = "";
+  tableBody.innerHTML = "";
+
+  const now = Date.now();
 
   for (const flight of flights) {
     try {
-      const url = `https://api.aviationstack.com/v1/flights?access_key=${API_KEY}&flight_number=${encodeURIComponent(flight.flightNumber)}`;
+      const url = `https://api.aviationstack.com/v1/flights?access_key=${API_KEY}&flight_number=${encodeURIComponent(flight.flightNumber)}&flight_date=${flight.flightDate}`;
       const res = await fetch(url);
       const data = await res.json();
 
       if (!data.data || data.data.length === 0) {
-        table.innerHTML += `<tr><td colspan="6">No data for flight ${flight.flightNumber}</td></tr>`;
+        tableBody.innerHTML += `<tr><td colspan="6">No data for ${flight.flightNumber} on ${flight.flightDate}</td></tr>`;
         continue;
       }
 
-      // Filter by date
-      const match = data.data.find(f => f.flight_date === flight.flightDate);
-      if (!match) {
-        table.innerHTML += `<tr><td colspan="6">No matching date for flight ${flight.flightNumber}</td></tr>`;
-        continue;
-      }
+      const match = data.data[0]; // Should only return the correct date with parameter
 
       const depAirport = match.departure.airport || "";
-      const depTime = match.departure.actual || match.departure.scheduled || "";
+      const depTime = match.departure.actual || match.departure.estimated || match.departure.scheduled || "";
       const arrAirport = match.arrival.airport || "";
-      const arrTime = match.arrival.estimated || match.arrival.scheduled || "";
-      const status = match.flight_status || "unknown";
+      const arrTime = match.arrival.actual || match.arrival.estimated || match.arrival.scheduled || "";
+      const statusRaw = match.flight_status || "unknown";
 
+      // Remove flights >30 min after landing
       const landedTime = match.arrival.actual ? new Date(match.arrival.actual) : null;
-      if (status === "landed" && landedTime) {
-        const diffMin = (Date.now() - landedTime.getTime()) / 60000;
-        if (diffMin > 30) continue; // Skip if more than 30 min after landing
+      if (statusRaw === "landed" && landedTime) {
+        const diffMin = (now - landedTime.getTime()) / 60000;
+        if (diffMin > 30) continue;
       }
 
       let statusClass = "";
-      if (status === "scheduled" || status === "active") statusClass = "green";
-      else if (status === "delayed") statusClass = "yellow";
-      else if (status === "cancelled") statusClass = "red";
-      else if (status === "landed") statusClass = "gray";
+      if (statusRaw === "scheduled" || statusRaw === "active") statusClass = "green";
+      else if (statusRaw === "delayed") statusClass = "yellow";
+      else if (statusRaw === "cancelled") statusClass = "red";
+      else if (statusRaw === "landed") statusClass = "gray";
 
-      table.innerHTML += `
+      tableBody.innerHTML += `
         <tr class="${statusClass}">
-          <td>${match.flight.iata || match.flight.number || ""}</td>
+          <td>${match.flight.iata || match.flight.number}</td>
           <td>${depAirport}</td>
           <td>${formatTime(depTime)}</td>
           <td>${arrAirport}</td>
           <td>${formatTime(arrTime)}</td>
-          <td>${status}</td>
+          <td>${statusRaw.toUpperCase()}</td>
         </tr>
       `;
     } catch (err) {
-      table.innerHTML += `<tr><td colspan="6">Error loading ${flight.flightNumber}</td></tr>`;
+      tableBody.innerHTML += `<tr><td colspan="6">Error loading ${flight.flightNumber}</td></tr>`;
+      console.error(err);
     }
   }
 }
@@ -141,7 +120,7 @@ function formatTime(dateString) {
 }
 
 fetchFlights();
-setInterval(fetchFlights, 60000); // refresh every 60s
+setInterval(fetchFlights, 120000); // Refresh every 2 min
 </script>
 
 </body>
