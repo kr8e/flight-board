@@ -9,6 +9,16 @@ h1 {
     margin: 20px;
 }
 
+form {
+    margin: 20px auto;
+}
+
+input, button {
+    padding: 8px;
+    margin: 5px;
+    font-size: 1rem;
+}
+
 table {
     margin: auto;
     border-collapse: collapse;
@@ -28,6 +38,6 @@ th, td {
     background-color: goldenrod;
 }
 
-.status-cancelled {
-    background-color: crimson;
+.status-landed {
+    background-color: teal;
 }

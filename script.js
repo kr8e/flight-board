@@ -1,36 +1,54 @@
 const tableBody = document.querySelector("#flight-table tbody");
+const flightForm = document.getElementById("flight-form");
+const flightInput = document.getElementById("flight-number");
 
-// Example: fetch flights from OpenSky (no API key needed)
+// Store flights in memory
+let trackedFlights = {}; // { flightNumber: { lastSeen: timestamp, landed: bool } }
+
+flightForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const flightNumber = flightInput.value.trim().toUpperCase();
+    if (!trackedFlights[flightNumber]) {
+        trackedFlights[flightNumber] = { lastSeen: Date.now(), landed: false };
+    }
+    flightInput.value = "";
+    fetchFlights();
+});
+
+// Fetch flight data from OpenSky
 async function fetchFlights() {
     try {
         const response = await fetch("https://opensky-network.org/api/states/all");
         const data = await response.json();
 
+        const now = Date.now();
         tableBody.innerHTML = "";
 
-        // Example: take first 10 flights for demo
-        data.states.slice(0, 10).forEach(flight => {
-            const row = document.createElement("tr");
+        Object.keys(trackedFlights).forEach(flightNum => {
+            const match = data.states.find(f => f[1] && f[1].trim().toUpperCase() === flightNum);
 
-            const callsign = flight[1] ? flight[1].trim() : "N/A";
-            const from = "Unknown"; // OpenSky free API doesn't give route
-            const depTime = new Date(flight[3] * 1000).toLocaleTimeString();
-            const to = "Unknown";
-            const arrTime = "—";
+            if (match) {
+                const depTime = match[3] ? new Date(match[3] * 1000).toLocaleTimeString() : "—";
+                const arrTime = match[4] ? new Date(match[4] * 1000).toLocaleTimeString() : "—";
 
-            // For demo, randomly assign status
-            const statuses = ["on-time", "delayed", "cancelled"];
-            const status = statuses[Math.floor(Math.random() * statuses.length)];
+                let status = "on-time";
+                if (match[8] === 0 && match[9] === 0) { 
+                    status = "landed";
+                    trackedFlights[flightNum].landed = true;
+                    trackedFlights[flightNum].lastSeen = now;
+                }
 
-            row.innerHTML = `
-                <td>${callsign}</td>
-                <td>${from}</td>
-                <td>${depTime}</td>
-                <td>${to}</td>
-                <td>${arrTime}</td>
-                <td class="status-${status}">${status.toUpperCase()}</td>
-            `;
-            tableBody.appendChild(row);
+                addRow(flightNum, "Unknown", depTime, "Unknown", arrTime, status);
+            } else {
+                if (trackedFlights[flightNum].landed) {
+                    // Keep landed flights for 30 min
+                    if (now - trackedFlights[flightNum].lastSeen > 30 * 60 * 1000) {
+                        delete trackedFlights[flightNum];
+                    } else {
+                        addRow(flightNum, "Unknown", "—", "Unknown", "—", "landed");
+                    }
+                }
+            }
         });
 
     } catch (error) {
@@ -38,5 +56,17 @@ async function fetchFlights() {
     }
 }
 
-fetchFlights();
+function addRow(flight, from, dep, to, arr, status) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+        <td>${flight}</td>
+        <td>${from}</td>
+        <td>${dep}</td>
+        <td>${to}</td>
+        <td>${arr}</td>
+        <td class="status-${status}">${status.toUpperCase()}</td>
+    `;
+    tableBody.appendChild(row);
+}
+
 setInterval(fetchFlights, 60000); // Refresh every 60 sec
