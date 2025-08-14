@@ -2,14 +2,21 @@ const tableBody = document.querySelector("#flight-table tbody");
 const flightForm = document.getElementById("flight-form");
 const flightInput = document.getElementById("flight-number");
 
-// Store flights in memory
-let trackedFlights = {}; // { flightNumber: { lastSeen: timestamp, landed: bool } }
+// Load stored flights from localStorage
+let trackedFlights = JSON.parse(localStorage.getItem("trackedFlights")) || {};
 
+// Save flights to localStorage
+function saveFlights() {
+    localStorage.setItem("trackedFlights", JSON.stringify(trackedFlights));
+}
+
+// Add a new flight
 flightForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const flightNumber = flightInput.value.trim().toUpperCase();
     if (!trackedFlights[flightNumber]) {
         trackedFlights[flightNumber] = { lastSeen: Date.now(), landed: false };
+        saveFlights();
     }
     flightInput.value = "";
     fetchFlights();
@@ -44,12 +51,15 @@ async function fetchFlights() {
                     // Keep landed flights for 30 min
                     if (now - trackedFlights[flightNum].lastSeen > 30 * 60 * 1000) {
                         delete trackedFlights[flightNum];
+                        saveFlights();
                     } else {
                         addRow(flightNum, "Unknown", "—", "Unknown", "—", "landed");
                     }
                 }
             }
         });
+
+        saveFlights(); // Save after updating data
 
     } catch (error) {
         console.error("Error fetching flights:", error);
@@ -70,3 +80,4 @@ function addRow(flight, from, dep, to, arr, status) {
 }
 
 setInterval(fetchFlights, 60000); // Refresh every 60 sec
+fetchFlights(); // Initial load
